@@ -1,13 +1,12 @@
 <div align="center">
 
-# Project Name
+# Highlighting
 [![Report Issue on Jira](https://img.shields.io/badge/Report%20Issues-Jira-0052CC?style=flat&logo=jira-software)](https://temple-cis-projects-in-cs.atlassian.net/jira/software/c/projects/DT/issues)
 [![Deploy Docs](https://github.com/ApplebaumIan/tu-cis-4398-docs-template/actions/workflows/deploy.yml/badge.svg)](https://github.com/ApplebaumIan/tu-cis-4398-docs-template/actions/workflows/deploy.yml)
-[![Documentation Website Link](https://img.shields.io/badge/-Documentation%20Website-brightgreen)](https://applebaumian.github.io/tu-cis-4398-docs-template/)
+[![Documentation Website Link](https://img.shields.io/badge/-Documentation%20Website-brightgreen)](https://capstone-projects-2025-fall.github.io/project-002-highlighting/)
 
 
 </div>
-
 
 ## Keywords
 
@@ -15,7 +14,9 @@ Section #, as well as any words that quickly give your peers insights into the a
 
 ## Project Abstract
 
-This document proposes a novel application of a text message (SMS or Email) read-out and hands-free call interacted between an Android Smartphone and an infotainment platform (headunit) in a car environment. When a phone receives an SMS or Email, the text message is transferred from the phone to the headunit through a Bluetooth connection. On the headunit, user can control which and when the received SMS or E-mail to be read out through the in-vehicle audio system. The user may press one button on the headunit to activate the hands-free feature to call back the SMS sender.
+This document proposes an application that aims to replicate the intelligent text prediction found within smartphones into an AAC device. The application will use methods of highlighting to direct the attention of the user of the AAC device. This includes primarily the use of different levels of opacity to draw more attention to specific words that are relevant to the context of conversation. The application will allow the user to use the device's microphone to listen to conversations and highlight relevant words to choose from that best fit the context.
+
+The goal of this application is to give the user a more efficient time to engage in conversation with others using an AAC device, while not limiting or overloading them with word options to choose from.
 
 ## High Level Requirement
 
@@ -37,7 +38,12 @@ Discuss what you need to develop this project. This includes background informat
 
 <div align="center">
 
-[//]: # (Replace with your collaborators)
-[Ian Tyler Applebaum](https://github.com/ApplebaumIan) • [Kyle Dragon Lee](https://github.com/leekd99)
+
+[Joo Cha](https://github.com/tuh14497) •
+[Jude Piacentino](https://github.com/JudeP2) •
+[Hemanth Kamana](https://github.com/123GetBuckets) •
+[Kevin Hitch](https://github.com/tun72869) •
+[Sley Chery](https://github.com/SleyChery) •
 
 </div>
+
