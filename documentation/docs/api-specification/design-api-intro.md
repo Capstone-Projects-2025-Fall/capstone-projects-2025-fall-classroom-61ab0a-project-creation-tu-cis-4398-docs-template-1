@@ -1,41 +1,197 @@
+# Design Document: Basic API Initialization
+
+**Description:** This document provides the complete design of a basic Express.js API, including class/module purposes, data fields, methods, pre/post conditions, parameters, and exceptions.
+
 ---
-sidebar_position: 1
-description: What should be in this section.
+
+## Overview
+
+This software initializes a simple RESTful API using **Express.js**. It sets up middleware for JSON parsing, defines test endpoints for GET and POST requests, and runs a local server on port **8080**.
+
+### Purpose
+
+* Demonstrate API initialization using Express.js.
+* Provide sample endpoints for testing GET and POST methods.
+* Serve as a foundation for expanding into a full REST API.
+
 ---
 
-Design Document - Part II API
-=============================
+## Modules and Fields
 
-**Purpose**
+| Field     | Type   | Purpose                                                                            |
+| --------- | ------ | ---------------------------------------------------------------------------------- |
+| `express` | Module | Imports the Express framework for creating and managing the web server.            |
+| `app`     | Object | Represents the Express application instance; used to define middleware and routes. |
+| `PORT`    | Number | Port number on which the API server listens (set to `8080`).                       |
 
-This Design Document gives the complete design of the software implementation. This information should be in structured comments (e.g. Javadoc) in the source files. We encourage the use of a documentation generation tool to generate a draft of your API that you can augment to include the following details.
+---
 
-**Requirements**
+## Middleware
 
-In addition to the general documentation requirements the Design Document - Part II API will contain:
+### **JSON Parser**
 
-General review of the software architecture for each module specified in Design Document - Part I Architecture. Please include your class diagram as an important reference.
+```js
+app.use(express.json());
+```
 
-**For each class define the data fields, methods.**
+**Purpose:** Enables parsing of incoming JSON request bodies, making them available via `req.body`.
 
-The purpose of the class.
+**Pre-condition:** Requests must contain valid JSON.
 
-The purpose of each data field.
+**Post-condition:** JSON data is accessible to subsequent route handlers.
 
-The purpose of each method
+**Exceptions:** If JSON is malformed, Express automatically returns `400 Bad Request`.
 
-Pre-conditions if any.
+---
 
-Post-conditions if any.
+## Server Initialization
 
-Parameters and data types
+```js
+app.listen(PORT, () => console.log(`it's alive on http://localhost:${PORT}`));
+```
 
-Return value and output variables
+**Purpose:** Starts the Express.js server on the defined port and logs a confirmation message.
 
-Exceptions thrown\* (PLEASE see note below for details).
+**Parameters:**
 
-An example of an auto-generated and then augmented API specification is here ([Fiscal Design Document 2\_API.docx](https://templeu.instructure.com/courses/106563/files/16928898?wrap=1 "Fiscal Design Document 2_API.docx") )
+* `PORT` *(Number)* — Server port.
+* Callback — Logs confirmation to console.
 
-This group developed their API documentation by hand ([Design Document Part 2 API-1\_MovieMatch.docx](https://templeu.instructure.com/courses/106563/files/16928899?wrap=1 "Design Document Part 2 API-1_MovieMatch.docx") )
+**Pre-condition:** No conflicting process occupies the port.
 
-\*At the top level, or where appropriate, all exceptions should be caught and an error message that is meaningful to the user generated. It is not OK to say ("xxxx has encountered a problem and will now close (OK?)". Error messages and recovery procedures should be documented in the User’s Manual.
+**Post-condition:** API becomes accessible at `http://localhost:8080`.
+
+**Return Value:** None.
+
+**Exceptions:** If the port is already in use, the system throws `EADDRINUSE`.
+
+---
+
+## Routes and Methods
+
+### **GET /test**
+
+```js
+app.get('/test', (req, res) => {
+    res.status(200).send({
+        name: 'Test1',
+        status: 'test'
+    });
+});
+```
+
+**Purpose:** Confirms API availability.
+
+**Method:** GET
+**Endpoint:** `/test`
+
+**Pre-condition:** Server must be running.
+
+**Post-condition:** Client receives success response.
+
+**Response:**
+
+```json
+{
+  "name": "Test1",
+  "status": "test"
+}
+```
+
+**Exceptions:** None expected.
+
+---
+
+### **POST /test/:id**
+
+```js
+app.post('/test/:id', (req, res) => {
+    const { id } = req.params;
+    const { info } = req.body;
+
+    if (!info) {
+        res.status(418).send({ message: 'No info!' });
+    }
+
+    res.send({
+        name: `Test message with info: ${info} and ID: ${id}`,
+    });
+});
+```
+
+**Purpose:** Handles POST requests by echoing provided parameters.
+
+**Method:** POST
+**Endpoint:** `/test/:id`
+
+**Parameters:**
+
+* `id` *(String)* — Extracted from URL.
+* `info` *(String)* — Sent in request body.
+* `req` *(Request Object)* — HTTP request object.
+* `res` *(Response Object)* — HTTP response object.
+
+**Pre-condition:**
+
+* Request body must include valid JSON.
+* Must contain field `info`.
+
+**Post-condition:**
+
+* Responds with JSON confirmation if `info` is provided.
+* Sends error message if missing.
+
+**Success Response:**
+
+```json
+{
+  "name": "Test message with info: <info> and ID: <id>"
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "message": "No info!"
+}
+```
+
+**Exceptions:**
+
+* **418 (I'm a teapot):** Missing `info` field.
+* **400 (Bad Request):** Malformed JSON.
+
+---
+
+## Error Handling
+
+* Express automatically handles JSON parsing errors.
+* Custom responses provide user-friendly messages.
+* Future improvement: Add centralized error-handling middleware.
+
+---
+
+## Summary Table
+
+| Method | Endpoint    | Description          | Success Response                                          | Error Response                  |
+| ------ | ----------- | -------------------- | --------------------------------------------------------- | ------------------------------- |
+| GET    | `/test`     | Verifies API status  | `{ name: "Test1", status: "test" }`                       | N/A                             |
+| POST   | `/test/:id` | Echoes provided data | `{ name: "Test message with info: <info> and ID: <id>" }` | `{ message: "No info!" }` (418) |
+
+---
+
+## Notes
+
+* Followed instructions from: [https://www.youtube.com/watch?v=-MTSQjw5DrM](https://www.youtube.com/watch?v=-MTSQjw5DrM)
+* Ensure `app.listen()` remains in the code; removing it will prevent the API from running.
+* Run using:
+
+  ```bash
+  node .
+  ```
+* Verify at: [http://localhost:8080](http://localhost:8080)
+
+---
+
+**End of Document**
