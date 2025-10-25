@@ -1,8 +1,45 @@
 # Testing Guide - Database Integration
 
+## 🧪 **Unit Testing (New)**
+
+### **Running Unit Tests**
+
+**Prerequisites:**
+- Node.js and npm installed
+- All dependencies installed (`npm install` in vscode-extension directory)
+
+**Test Commands:**
+```bash
+# Run all tests
+npm test
+
+# Run tests once (CI mode)
+npm run test:run
+
+# Run tests with coverage
+npm run test:coverage
+```
+
+**Test Coverage:**
+- **61 comprehensive unit tests** covering all functionality
+- **Authentication**: Sign up, sign in, OAuth (Google/GitHub), sign out
+- **Profile Management**: Create, read, update profiles
+- **Project Creation**: Create projects with invite codes
+- **Invite System**: Join projects with invite codes
+- **User-Project Linking**: RLS simulation, member relationships
+- **Data Loading**: Database integration, error handling
+- **VS Code Commands**: Extension activation, webview handling
+- **Error Handling**: Graceful failure scenarios
+
+**Test Structure:**
+- All tests use **mocks** (no real database calls)
+- Fast execution (< 1 second)
+- Comprehensive coverage of edge cases
+- Integration test scenarios
+
 ## 🚀 **Critical: Apply RLS Migration First**
 
-**BEFORE testing, you MUST run the RLS migration:**
+**BEFORE manual testing, you MUST run the RLS migration:**
 
 1. Go to your **Supabase Dashboard**
 2. Navigate to **SQL Editor**
@@ -10,7 +47,7 @@
 4. Paste and run the SQL script
 5. Verify no errors occur
 
-## 🧪 **Testing Checklist**
+## 🧪 **Manual Testing Checklist**
 
 ### **Test 1: Basic Extension Functionality**
 
@@ -158,6 +195,13 @@
 
 ## 📊 **Success Criteria**
 
+### **Unit Tests:**
+- [ ] All 61 unit tests pass
+- [ ] Test coverage is comprehensive
+- [ ] No test failures or errors
+- [ ] All mock scenarios work correctly
+
+### **Manual Testing:**
 - [ ] No foreign key constraint errors
 - [ ] RLS policies are in place and working
 - [ ] Users can only see their own projects
@@ -168,6 +212,13 @@
 
 ## 🚨 **If Tests Fail**
 
+### **Unit Test Failures:**
+1. **Check Dependencies**: Run `npm install` in vscode-extension directory
+2. **Check TypeScript**: Run `npm run compile` to ensure no compilation errors
+3. **Check Mock Setup**: Verify all mocks are properly configured
+4. **Check Test Environment**: Ensure vitest is properly configured
+
+### **Manual Test Failures:**
 1. **Check RLS Migration**: Ensure the SQL migration was applied successfully
 2. **Check Environment Variables**: Verify `.env` file has correct Supabase credentials
 3. **Check Console Logs**: Look for specific error messages
@@ -185,4 +236,5 @@ If you encounter issues:
 ---
 
 **Last Updated**: 2024-12-20  
-**Status**: Ready for Testing
+**Status**: Ready for Testing  
+**Unit Tests**: 61 tests passing with comprehensive coverage

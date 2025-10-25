@@ -13,6 +13,12 @@ let authService: AuthService;
 let databaseService: DatabaseService;
 let extensionContext: vscode.ExtensionContext;
 
+// For testing, allow access to global variables
+declare global {
+  var authService: AuthService;
+  var databaseService: DatabaseService;
+}
+
 // Helper function to get the full path to our data file
 function getDataFilePath(): string | undefined {
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
@@ -25,24 +31,27 @@ function getDataFilePath(): string | undefined {
 
 // Helper function to load all data from the database
 async function loadInitialData(): Promise<any> {
-  if (!authService.isAuthenticated()) {
-    return { users: [], projects: [], promptCount: 0 };
-  }
+  try {
+    const auth = (global as any).authService || authService;
+    if (!auth.isAuthenticated()) {
+      return { users: [], projects: [], promptCount: 0 };
+    }
 
-  const user = authService.getCurrentUser();
-  if (!user) {
-    return { users: [], projects: [], promptCount: 0 };
-  }
+    const user = auth.getCurrentUser();
+    if (!user) {
+      return { users: [], projects: [], promptCount: 0 };
+    }
 
+    const db = (global as any).databaseService || databaseService;
   try {
     // Get user's profile
-    let profile = await databaseService.getProfile(user.id);
+    let profile = await db.getProfile(user.id);
     
     // If profile doesn't exist, create one
     if (!profile) {
       console.log('Creating new profile for user:', user.id);
       console.log('User object:', user);
-      profile = await databaseService.createProfile(
+      profile = await db.createProfile(
         user.id,
         user.name || user.email || 'User',
         '',
@@ -52,12 +61,12 @@ async function loadInitialData(): Promise<any> {
     }
     
     // Get user's projects (RLS will filter to only their projects)
-    const projects = await databaseService.getProjectsForUser(user.id);
+    const projects = await db.getProjectsForUser(user.id);
     
     // Get project members for each project
     const projectsWithMembers = await Promise.all(
       projects.map(async (project) => {
-        const members = await databaseService.getProjectMembers(project.id);
+        const members = await db.getProjectMembers(project.id);
         return {
           ...project,
           selectedMemberIds: members.map(m => m.user_id)
@@ -66,11 +75,11 @@ async function loadInitialData(): Promise<any> {
     );
 
     // Get all profiles from user's projects (for team members display)
-    const allProfiles = await databaseService.getAllProfilesForUserProjects(user.id);
+    const allProfiles = await db.getAllProfilesForUserProjects(user.id);
 
     // Get AI prompts count
     const allPrompts = await Promise.all(
-      projects.map(project => databaseService.getAIPromptsForProject(project.id))
+      projects.map(project => db.getAIPromptsForProject(project.id))
     );
     const promptCount = allPrompts.flat().length;
 
@@ -84,26 +93,32 @@ async function loadInitialData(): Promise<any> {
     console.error("Error loading data from database:", error);
     return { users: [], projects: [], promptCount: 0 };
   }
+  } catch (error) {
+    console.error("Error checking authentication:", error);
+    return { users: [], projects: [], promptCount: 0 };
+  }
 }
 
 // Helper function to save data to the database
 async function saveInitialData(data: any): Promise<void> {
-  if (!authService.isAuthenticated()) {
+  const auth = (global as any).authService || authService;
+  if (!auth.isAuthenticated()) {
     vscode.window.showErrorMessage("Please log in to save data.");
     return;
   }
 
-  const user = authService.getCurrentUser();
+  const user = auth.getCurrentUser();
   if (!user) {
     vscode.window.showErrorMessage("User not found. Please log in again.");
     return;
   }
 
+  const db = (global as any).databaseService || databaseService;
   try {
     // Update user profile if provided
     if (data.users && data.users.length > 0) {
       const userData = data.users[0];
-      await databaseService.updateProfile(user.id, {
+      await db.updateProfile(user.id, {
         name: userData.name || '',
         skills: Array.isArray(userData.skills) ? userData.skills.join(', ') : (userData.skills || ''),
         programming_languages: Array.isArray(userData.programming_languages) ? userData.programming_languages.join(', ') : (userData.programming_languages || ''),
@@ -851,6 +866,88 @@ Give me a specific message for EACH team member, detailing them what they need t
 
 export function deactivate() {
   // Clean up resources if needed
+}
+
+// Export the functions for testing
+export { loadInitialData, saveInitialData };
+
+// Helper function to create prompt for project (exported for testing)
+export function createPromptForProject(project: any, users: any[]): string {
+  if (!project) {
+    return "";
+  }
+
+  const selectedMembers = users.filter(user => 
+    project.selectedMemberIds && project.selectedMemberIds.includes(user.id)
+  );
+
+  const teamMemberDetails = selectedMembers
+    .map((user, index) => 
+      `Team Member ${index + 1}:
+Name: ${user.name}
+Skills: ${user.skills || "Not specified"}
+Programming Languages: ${user.programming_languages || "Not specified"}
+Willing to work on: ${user.willing_to_work_on || "Not specified"}
+
+`
+    )
+    .join("");
+
+  return `PROJECT ANALYSIS AND TEAM OPTIMIZATION REQUEST
+
+=== PROJECT INFORMATION ===
+Project Name: ${project.name}
+Created: ${new Date(project.created_at).toLocaleString()}
+
+Project Description:
+${project.description}
+
+Project Goals:
+${project.goals}
+
+Project Requirements:
+${project.requirements}
+
+=== TEAM COMPOSITION ===
+Team Size: ${selectedMembers.length} members
+
+${teamMemberDetails}
+
+=== AI ANALYSIS REQUEST ===
+
+Please analyze this project and team composition and provide:
+
+1. TEAM ANALYSIS:
+   - Evaluate if the current team has the right skill mix for the project requirements
+   - Identify any skill gaps or redundancies
+   - Assess team member compatibility based on their stated interests
+
+2. PROJECT FEASIBILITY:
+   - Analyze if the project goals are achievable with the current team
+   - Identify potential challenges based on requirements vs. available skills
+   - Suggest timeline considerations
+
+3. ROLE ASSIGNMENTS:
+   - Recommend specific roles for each team member based on their skills
+   - Suggest who should lead different aspects of the project
+   - Identify collaboration opportunities between team members
+
+4. OPTIMIZATION RECOMMENDATIONS:
+   - Suggest additional skills that might be needed
+   - Recommend training or resource allocation
+   - Propose project structure and workflow improvements
+
+5. RISK ASSESSMENT:
+   - Identify potential project risks based on team composition
+   - Suggest mitigation strategies
+   - Highlight critical success factors
+
+6. DELIVERABLES MAPPING:
+   - Break down project requirements into specific deliverables
+   - Map deliverables to team member capabilities
+   - Suggest milestone structure
+
+Give me a specific message for EACH team member, detailing them what they need to do RIGHT NOW and in the FUTURE. Give each user the exact things they need to work on according also to their skills.`;
 }
 
 async function getLoginHtml(
