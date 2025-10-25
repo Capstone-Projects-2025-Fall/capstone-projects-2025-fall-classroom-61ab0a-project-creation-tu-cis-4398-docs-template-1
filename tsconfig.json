@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,              // generate .d.ts files
+    "declarationDir": "dist/types",   // optional: keep types separate from JS bundle
+    "emitDeclarationOnly": true,      // only generate types, no JS
+    "outDir": "dist",                 // output directory for types (or combined with JS)
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "lib": ["ES2020", "DOM"],
+    "types": ["vitest/globals"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "dist",
+    "node_modules", 
+    "test",
+    "src/whisper/__mocks__",
+    "src/whisper/__mocks__/**/*",
+    "src/whisper/models",
+    "src/whisper/models/**/*",
+    "src/**/__mocks__/**",
+    "src/**/models/**",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}
