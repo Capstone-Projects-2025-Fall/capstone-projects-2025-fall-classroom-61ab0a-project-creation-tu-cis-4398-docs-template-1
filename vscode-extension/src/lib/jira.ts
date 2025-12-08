@@ -1,0 +1,455 @@
+// Jira helpers: building description as ADF (Atlassian Document Format, readable format for jira)
+//This file handles converting AI-generated text into valid Jira issues using the Jira REST API
+
+import fetch from "node-fetch"; // Used to make HTTP requests to Jira’s REST API from Node.js
+
+type CreateIssuesOpts = {// Define what inputs/options from users are required to create Jira issues
+  baseUrl: string;
+  email: string;
+  token: string;
+  projectKey: string;
+  backlogMarkdown: string; // AI output (plain/markdown-like text)
+  minTasks?: number;
+  maxTasks?: number;
+};
+
+
+export async function createIssuesFromBacklog(opts: CreateIssuesOpts) {
+  /**
+  Create Jira issues from a Markdown-like backlog
+  - Parses lines like "- [ ] Task title" (or "- Task title")
+  - Creates one Task issue per line
+  - Description is sent as an ADF document (required by Jira v3 API)
+ */
+
+  const { baseUrl, email, token, projectKey, backlogMarkdown, minTasks, maxTasks } = opts; // Extract each value from the options object
+
+  const maxAllowedTasks = Math.min(Math.max(maxTasks ?? 25, 10), 25); // clamp to 10-25 window
+  const minAllowedTasks = Math.min(Math.max(minTasks ?? 10, 1), maxAllowedTasks); // ensure <= max
+
+  const tasks = extractTasks(backlogMarkdown, maxAllowedTasks); // Parse task titles from the AI Markdown list (one title per bullet)
+
+  if (tasks.length < minAllowedTasks) {
+    throw new Error(
+      `Only ${tasks.length} task(s) detected from AI, but at least ${minAllowedTasks} are required. Please provide a more detailed project description to generate additional tasks.`
+    );
+  }
+
+  const auth = Buffer.from(`${email}:${token}`).toString("base64"); // this is needed because Jira’s API requires Basic Authentication: meaning that the email and token must be combined and Base64-encoded before being sent in the HTTP header for secure login
+
+  const adfDoc = toAdf(backlogMarkdown); // Convert the backlog text into Jira’s ADF format for the issue description
+
+  // Debug logs so we can see what we're sending
+  console.log("[jira.ts] Parsed tasks:", tasks);      // show first 500 chars                        * mark if too long
+  console.log("[jira.ts] ADF preview:", JSON.stringify(adfDoc).slice(0, 500) + (JSON.stringify(adfDoc).length > 500 ? "…(truncated)" : ""));
+
+  const results: any[] = []; // Array to store all created Jira issues 
+
+  for (const title of tasks) { //Loop through each parsed task title and create one issue per line
+    const payload = {
+      fields: {
+        project: { key: projectKey }, // specifying Jira project to issue tasks to
+        summary: title, // issue title
+        issuetype: { name: "Task" }, // set the issue type as "Task" so it can appear in backlog
+        description: adfDoc, // formatted description (ADF)
+      },
+    };
+
+    //Log what is being sent for debugging purposes
+    console.log("[jira.ts] Creating issue payload:", JSON.stringify({ summary: title, projectKey }).slice(0, 200));
+
+    const r = await fetch(`${trimSlash(baseUrl)}/rest/api/3/issue`, {// Send a POST request to Jira REST API to create the issue
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${auth}`,// Basic Auth using email + token (encoded in Base64 so the API can verify users' identity)
+        "Accept": "application/json", // expect JSON (because Jira’s REST API uses JSON as its standard data format) response
+        "Content-Type": "application/json", // sending JSON(same thing as above) body
+      },
+      body: JSON.stringify(payload), // converts payload object (holding jira issue details (summary, description, and project)) into a JS string and attaches it to HTTP request body
+    });
+
+    if (!r.ok) { // If Jira responds with error (not OK), log and throw it
+      const errText = await r.text().catch(() => "");
+      console.error("[jira.ts] Jira error:", r.status, errText);
+      throw new Error(`Jira ${r.status}: ${errText}`);
+    }
+
+    const data = await r.json(); //If success, parse returned JSON and save the created issue info
+    results.push(data);
+  }
+
+  return results; // Return all created issues (debbuging purposes/ confirmation)
+}
+
+/* 
+  extractTasks()
+  Pulls each line that looks like "- [ ] Do something" or "- Do something"
+  Returns an array of clean task titles.
+ */
+function extractTasks(md: string, limit = 25): string[] {
+  const lines = md.split(/\r?\n/); // split markdown text into lines
+  const tasks: string[] = [];
+
+  for (const line of lines) { //
+    // Checkboxes: - [ ] Task title
+    let m = line.match(/^- \[\s?\]\s+(.*)$/i); //checks whether line of text match - [ ]. first, line must start with a ^- (-); second, \[\s?\] means that the dash(-) must be followed by [ with optional space ]; 
+    //thrid \s, at least one space after [ ]; fourth (.*), captures all task's texta after ( - [ ] ); last /i makes the whole check for match case sensitive 
+    if (m && m[1]) { //if the tasks generated by AI (m[1]) starting with -[] matches m above, trim the extra empty spaces below
+      const title = m[1].replace(/\s+/g, " ").trim();
+      if (title) tasks.push(title); //If a cleaned, non-empty task title was found, adds that title to the tasks list
+      continue;
+    }
+    // Plain bullets: - Task title
+    m = line.match(/^- (.+)$/); // check if the line starts with "- " followed by some text (plain bullet task)
+    if (m && m[1]) { // make sure it actually matched and captured the task text
+      const title = m[1].replace(/\s+/g, " ").trim(); // clean extra spaces inside the task text and trim edges
+      if (title) tasks.push(title); // if the title is not empty, add it to the task list for later use
+    }
+  }
+
+  return tasks.slice(0, limit); // safety cap with caller-provided limit
+}
+
+/**
+ * Convert a markdown-like backlog into a simple, universally-accepted ADF document
+ * We produce:
+ *   doc(version=1)
+ *     paragraph("Generated Backlog")
+ *     bulletList(listItem(paragraph(lineText))) … for any leading '-' or '*'
+ *     paragraph(lines that aren't bullets)
+ */
+function toAdf(md: string): any {
+  const lines = md.split(/\r?\n/); //Splits Markdown text (md) into an array of lines, breaking at each newline (\n or \r\n). So the code can go through the text line by line to detect bullets, checkboxes, or paragraphs
+  const doc: any = { type: "doc", version: 1, content: [] as any[] }; // basic ADF doc skeleton (Creates a starting ADF (Atlassian Document Format) object with a version and an empty content list). Will later store all the formatted text blocks (like paragraphs and bullet lists)
+
+  // header line at the top of description:
+  doc.content.push(p("Generated Backlog"));
+
+  // gather consecutive bullet lines into one bulletList
+  let currentListItems: any[] = [];
+
+  const flushList = () => {
+    if (currentListItems.length > 0) {
+      doc.content.push({
+        type: "bulletList",
+        content: currentListItems.map((li) => ({
+          type: "listItem",
+          content: [ p(li) ], // listItem → paragraph → text
+        })),
+      });
+      currentListItems = []; // reset list buffer
+    }
+  };
+    //Process each line in the Markdown backlog
+  for (const raw of lines) {
+    const line = raw.trimEnd(); // remove trailing spaces
+
+    
+    const isBullet = /^[-*]\s+/.test(line); // check if it is a Bullet or checkbox bullet
+    const isCheckbox = /^-\s*\[\s?[xX]?\s?\]\s+/.test(line); //  won’t render actual checkbox ADF; keep as bullet text
+
+    if (isBullet || isCheckbox) {
+      // Clean out "- [ ] " or "- " symbols to keep only the task text
+      const cleaned = line
+        .replace(/^-\s*\[\s?[xX]?\s?\]\s+/, "") // remove "- [ ] " or "- [x] "
+        .replace(/^[-*]\s+/, "")                // remove "- " or "* "
+        .trim();
+      if (cleaned) currentListItems.push(cleaned); // add to list buffer
+      continue;
+    }
+
+    // Non-bullet line: close any existing list and create a paragraph
+    flushList();
+    const plain = line.trim();
+    if (plain.length > 0) {
+      doc.content.push(p(plain));  // regular text paragraph
+    } else {
+      // keep empty lines to avoid extra empty nodes
+      doc.content.push(p(" "));
+    }
+  }
+
+  // Push any remaining list items at the end
+  flushList();
+  //Return the fully built ADF document
+  return doc;
+}
+
+/** Helper: ADF paragraph node with plain text */
+function p(text: string) {
+  return {
+    type: "paragraph",
+    content: text ? [{ type: "text", text }] : [],
+  };
+}
+
+function trimSlash(url: string) { //Removes any trailing slashes ("/") from a URL
+ //Prevents double slashes when joining with Jira API endpoint
+  return url.replace(/\/+$/, "");
+}
+
+// --- Additional helpers for Jira management ---
+type JiraAuth = {
+  baseUrl: string; // Jira Cloud site URL, used to build REST endpoints
+  email: string; // Atlassian account email used with the API token
+  token: string; // Jira API token used for Basic Auth
+};
+
+type JiraRequestInit = {
+  method?: string; // HTTP verb for Jira REST call
+  body?: any; // Optional request payload (stringified later)
+};
+
+async function jiraRequest<T>(
+  auth: JiraAuth,
+  path: string,
+  init: JiraRequestInit = {}
+): Promise<T> {
+  const authHeader = Buffer.from(`${auth.email}:${auth.token}`).toString("base64"); // Basic auth header for all Jira requests
+  const response = await fetch(`${trimSlash(auth.baseUrl)}${path}`, { // Call Jira REST endpoint with provided path
+    method: init.method, // e.g., GET/POST/PUT/DELETE depending on operation
+    body: init.body, // JSON payload (string) if provided
+    headers: {
+      "Authorization": `Basic ${authHeader}`, // Jira REST API expects Basic auth
+      "Accept": "application/json", // ask Jira for JSON responses
+      "Content-Type": "application/json", // send JSON bodies
+    },
+  });
+
+  if (!response.ok) { // Bubble up Jira errors with helpful context
+    const errText = await response.text().catch(() => "");
+    const error: any = new Error(`Jira ${response.status}: ${errText}`);
+    error.status = response.status; // allow callers to check status codes
+    error.body = errText; // preserve raw error body for debugging
+    throw error;
+  }
+
+  if (response.status === 204) { // Jira sometimes returns 204 No Content
+    return {} as T;
+  }
+  return (await response.json()) as T; // Parse JSON payload into typed response
+}
+
+function mapIssues(data: any) {
+  return (
+    data?.issues?.map((issue: any) => ({
+      id: issue.id, // Jira internal issue id
+      key: issue.key, // Human-readable issue key (e.g., PROJ-123)
+      summary: issue.fields?.summary ?? "", // Task title
+      description: issue.fields?.description ?? null, // ADF description content
+      status: {
+        id: issue.fields?.status?.id,
+        name: issue.fields?.status?.name, // Board/status column
+      },
+      assignee: issue.fields?.assignee
+        ? {
+            accountId: issue.fields.assignee.accountId, // Unique Atlassian account id (for assignment updates)
+            displayName: issue.fields.assignee.displayName || issue.fields.assignee.name || "", // Friendly name to show in UI
+            email: issue.fields.assignee.emailAddress || "", // Email for mapping to local teammates
+          }
+        : null,
+      updated: issue.fields?.updated, // Timestamp for sorting/showing last activity
+      priority: issue.fields?.priority?.name ?? null, // Jira priority label if present
+    })) ?? []
+  );
+}
+
+async function executeSearch(
+  auth: JiraAuth,
+  path: string,
+  payload: any
+) {
+  const data = await jiraRequest<any>(auth, path, { // POST to Jira search endpoint (new or legacy)
+    method: "POST",
+    body: JSON.stringify(payload), // Jira expects a JSON body for JQL searches
+  });
+  console.log("[Jira] search response (issues)", data?.issues?.length ?? 0);
+  const mapped = mapIssues(data); // Normalize fields the webview uses
+  console.log(`[Jira] ${path} returned ${mapped.length} issues`);
+  return mapped;
+}
+
+export async function searchIssues(
+  auth: JiraAuth,
+  projectKey: string,
+  opts?: { status?: string; search?: string }
+) {
+  // Query Jira for tasks in a project, with optional status filter and full-text search, and return mapped issues for the webview
+  const jqlParts = [`project = "${projectKey}"`];
+  if (opts?.status) {
+    jqlParts.push(`status = "${opts.status}"`);
+  }
+  if (opts?.search) {
+    const term = opts.search.replace(/"/g, '\\"'); // escape quotes so JQL stays valid
+    jqlParts.push(`text ~ "${term}"`); // free-text search across issue content
+  }
+  const jqlQuery = jqlParts.join(" AND ");
+
+  const baseFields = {
+    maxResults: 50,
+    fields: ["summary", "status", "assignee", "description", "updated", "priority"],
+    expand: ["renderedFields"],
+  };
+
+  try {
+    console.log("[Jira] Searching issues via /search/jql", jqlQuery);
+    return await executeSearch(auth, "/rest/api/3/search/jql", {
+      ...baseFields,
+      expand: Array.isArray(baseFields.expand) ? baseFields.expand.join(",") : baseFields.expand,
+      jql: jqlQuery,
+    });
+  } catch (err: any) {
+    if (err?.status === 400 || (err?.message || "").includes("Invalid request payload")) {
+      console.warn("[Jira] search/jql failed, falling back to legacy search endpoint:", err?.message);
+      return await executeSearch(auth, "/rest/api/3/search", {
+        startAt: 0,
+        ...baseFields,
+        expand: baseFields.expand,
+        jql: jqlQuery,
+      });
+    }
+    throw err;
+  }
+}
+
+export async function createIssue(
+  auth: JiraAuth,
+  input: { projectKey: string; summary: string; description?: string; assigneeAccountId?: string | null }
+) {
+  // Create a new Jira Task using the simple ADF formatter for description
+  const payload = {
+    fields: {
+      project: { key: input.projectKey },
+      summary: input.summary,
+      issuetype: { name: "Task" },
+      description: toSimpleAdf(input.description ?? input.summary),
+      ...(input.assigneeAccountId !== undefined
+        ? { assignee: input.assigneeAccountId ? { accountId: input.assigneeAccountId } : null }
+        : {}),
+    },
+  };
+  return jiraRequest<any>(auth, "/rest/api/3/issue", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateIssue(
+  auth: JiraAuth,
+  issueIdOrKey: string,
+  fields: { summary?: string; description?: string; assigneeAccountId?: string | null }
+) {
+  // Update an existing Jira issue's summary/description (ADF formatted)
+  const payload: any = { fields: {} };
+  if (fields.summary !== undefined) {
+    payload.fields.summary = fields.summary;
+  }
+  if (fields.description !== undefined) {
+    payload.fields.description = toSimpleAdf(fields.description);
+  }
+  if (fields.assigneeAccountId !== undefined) {
+    payload.fields.assignee = fields.assigneeAccountId ? { accountId: fields.assigneeAccountId } : null;
+  }
+  return jiraRequest<any>(auth, `/rest/api/3/issue/${issueIdOrKey}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteIssue(auth: JiraAuth, issueIdOrKey: string) {
+  // Remove a Jira issue by id/key
+  return jiraRequest(auth, `/rest/api/3/issue/${issueIdOrKey}`, {
+    method: "DELETE",
+  });
+}
+
+export async function assignIssue(
+  auth: JiraAuth,
+  issueIdOrKey: string,
+  accountId: string | null
+) {
+  // Assign (or clear assignment) for a Jira issue via accountId
+  return jiraRequest(auth, `/rest/api/3/issue/${issueIdOrKey}/assignee`, {
+    method: "PUT",
+    body: JSON.stringify({ accountId }),
+  });
+}
+
+export async function getProjectStatuses(auth: JiraAuth, projectKey: string) {
+  // Fetch all unique workflow statuses for a project (used to populate filters)
+  const data = await jiraRequest<any>(auth, `/rest/api/3/project/${projectKey}/statuses`);
+  const statuses: string[] = [];
+  for (const workflow of data ?? []) {
+    for (const status of workflow.statuses ?? []) {
+      if (status?.name && !statuses.includes(status.name)) {
+        statuses.push(status.name);
+      }
+    }
+  }
+  return statuses;
+}
+
+export async function getIssueTransitions(auth: JiraAuth, issueIdOrKey: string) {
+  // Retrieve available transitions for an issue to drive the status dropdown in the webview
+  const data = await jiraRequest<any>(auth, `/rest/api/3/issue/${issueIdOrKey}/transitions`);
+  return data?.transitions ?? [];
+}
+
+export async function transitionIssue(
+  auth: JiraAuth,
+  issueIdOrKey: string,
+  transitionId: string
+) {
+  // Move an issue to a new status using a transition id
+  return jiraRequest(auth, `/rest/api/3/issue/${issueIdOrKey}/transitions`, {
+    method: "POST",
+    body: JSON.stringify({ transition: { id: transitionId } }),
+  });
+}
+
+export async function findUserAccountId(auth: JiraAuth, query: string) {
+  // Resolve an Atlassian accountId from an email/partial query for assignments
+  if (!query) {
+    return null;
+  }
+  const encoded = encodeURIComponent(query);
+  const users = await jiraRequest<any[]>(auth, `/rest/api/3/user/search?query=${encoded}`);
+  if (Array.isArray(users) && users.length > 0) {
+    return users[0].accountId;
+  }
+  return null;
+}
+
+export async function getAssignableUsers(auth: JiraAuth, projectKey: string) {
+  // Fetch Jira users who can be assigned issues in the given project
+  const users = await jiraRequest<any[]>(
+    auth,
+    `/rest/api/3/user/assignable/search?project=${encodeURIComponent(projectKey)}`
+  );
+  return (users || []).map((u: any) => ({
+    accountId: u.accountId,
+    email: u.emailAddress || "",
+    displayName: u.displayName || u.name || u.accountId,
+  }));
+}
+
+function toSimpleAdf(text: string) {
+  // Minimal ADF builder for short descriptions/summaries when creating/updating issues
+  return {
+    type: "doc",
+    version: 1,
+    content: [
+      {
+        type: "paragraph",
+        content: text
+          ? [
+              {
+                type: "text",
+                text,
+              },
+            ]
+          : [],
+      },
+    ],
+  };
+}
