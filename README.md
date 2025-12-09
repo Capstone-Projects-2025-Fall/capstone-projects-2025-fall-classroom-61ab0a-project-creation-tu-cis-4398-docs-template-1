@@ -1,43 +1,90 @@
 <div align="center">
 
-# Project Name
+# Highlighting
 [![Report Issue on Jira](https://img.shields.io/badge/Report%20Issues-Jira-0052CC?style=flat&logo=jira-software)](https://temple-cis-projects-in-cs.atlassian.net/jira/software/c/projects/DT/issues)
 [![Deploy Docs](https://github.com/ApplebaumIan/tu-cis-4398-docs-template/actions/workflows/deploy.yml/badge.svg)](https://github.com/ApplebaumIan/tu-cis-4398-docs-template/actions/workflows/deploy.yml)
-[![Documentation Website Link](https://img.shields.io/badge/-Documentation%20Website-brightgreen)](https://applebaumian.github.io/tu-cis-4398-docs-template/)
+[![Documentation Website Link](https://img.shields.io/badge/-Documentation%20Website-brightgreen)](https://capstone-projects-2025-fall.github.io/project-002-highlighting/)
 
 
 </div>
 
-
 ## Keywords
 
-Section #, as well as any words that quickly give your peers insights into the application like programming language, development platform, type of application, etc.
-
+002, real-time, AAC, highlighting, context
 ## Project Abstract
 
-This document proposes a novel application of a text message (SMS or Email) read-out and hands-free call interacted between an Android Smartphone and an infotainment platform (headunit) in a car environment. When a phone receives an SMS or Email, the text message is transferred from the phone to the headunit through a Bluetooth connection. On the headunit, user can control which and when the received SMS or E-mail to be read out through the in-vehicle audio system. The user may press one button on the headunit to activate the hands-free feature to call back the SMS sender.
+This project aims to enhance an existing Augmentative and Alternative Communication (AAC) application with the integration of intelligent text prediction. The extension will use methods of highlighting to direct the attention of the user of the AAC device. This includes primarily the use of different levels of opacity to draw more attention to specific words that are relevant to the context of conversation. The extension will capture audio input through a microphone and use an intelligent contextual model to analyze and suggest words.
 
-## High Level Requirement
-
-Describe the requirements – i.e., what the product does and how it does it from a user point of view – at a high level.
-
+The goal of this application is to improve the efficiency and communication for AAC users by reducing the time required to create responses during conversations by offering them suggested words based on contextual analysis.
 ## Conceptual Design
 
-Describe the initial design concept: Hardware/software architecture, programming language, operating system, etc.
+This project builds upon a previous capstone project, SmartSpeech, which developed an AAC board for the use of non-verbal communication. This project will extend SmartSpeech and add the functionality by integrating audio input and a contextual highlighting system that will emphasize suggested word options based on the conversation.
+
+This extension will be built with TypeScript and Python to maintain compatibility with SmartSpeech's code. Whisper AI, an automatic speech recognition (ASR) model will be incorporated to take care of speech-to-text conversion. This text will be analyzed by an intelligent contextual model and suggest words based on relevant words. Words with higher suggestion scores will have tiles that are made darker to clarify the relevance of the word to the context.
 
 ## Background
+The use of AAC devices is imperative for non-verbal communication and autism spectrum children. This project aims to improve the time efficiency of communication that most AAC devices lack in. This project hopes to solve this problem of conversations taking longer than expected by using context awareness methods like speech recognition and highlighting.
+## How to Run:
 
-The background will contain a more detailed description of the product and a comparison to existing similar projects/products. A literature search should be conducted and the results listed. Proper citation of sources is required. If there are similar open-source products, you should state whether existing source will be used and to what extent. If there are similar closed-source/proprietary products, you should state how the proposed product will be similar and different.
+1. Clone this repo.
+2. Create a .env file and add in:
+```shell 
+OPENAI_API_KEY= (yourkey)
+```
+
+3. Run the following commands:
+   
+```shell
+cd backend 
+npm install
+node server.mjs & (FOR Ubunut / MAC OS)
+start node server.mjs (FOR Powershell)
+```
+
+4. Go back to root folder
+```shell
+cd..
+```
+5. Run the following commands:
+```shell
+cd frontend
+npm i
+npm run dev
+```
+
+6. Go to http://localhost:3000 to view the website
+
+**Deployed version**
+
+1. Go to https://aachighlighting.vercel.app/
 
 ## Required Resources
 
-Discuss what you need to develop this project. This includes background information you will need to acquire, hardware resources, and software resources. If these are not part of the standard Computer Science Department lab resources, these must be identified early and discussed with the instructor.
+* What users will need:
+
+    * Ipad or tablet device (Needs microphone for active listening)
+    * Internet access
+
+* What the project needs:
+
+    * Github and git commands
+    * Strong enough machine to run AAC board and its features locally or through deployed version on Vercel
+    * Whisper AI for speech recognition
+    * Typescript
+    * Python
+    * Docusaurus for convenient documentation
+    * Vercel to host the AAC board
 
 ## Collaborators
 
 <div align="center">
 
-[//]: # (Replace with your collaborators)
-[Ian Tyler Applebaum](https://github.com/ApplebaumIan) • [Kyle Dragon Lee](https://github.com/leekd99)
+
+[Joo Cha](https://github.com/tuh14497) •
+[Jude Piacentino](https://github.com/JudeP2) •
+[Hemanth Kamana](https://github.com/123GetBuckets) •
+[Kevin Hitch](https://github.com/tun72869) •
+[Sley Chery](https://github.com/SleyChery) •
 
 </div>
+
